@@ -1,0 +1,39 @@
+import numpy as np
+from sklearn.manifold import TSNE
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+# testLoader = ...
+
+x_vectors = []  # x 벡터를 저장할 리스트
+
+# 모델을 평가 모드로 설정
+tdnn_model.eval()
+
+with torch.no_grad():
+    for inputs, _ in testLoader:  # 라벨은 사용하지 않습니다
+        inputs_tensor = torch.tensor(inputs, dtype=torch.float32)
+        
+        # 순전파를 통해 x 벡터를 얻습니다
+        _, x_vector = tdnn_model(inputs_tensor)
+        x_vectors.append(x_vector)
+
+# 모든 x 벡터를 하나의 배열로 결합
+all_x_vectors = torch.cat(x_vectors, dim=0).numpy()
+
+
+# t-SNE를 사용한 차원 축소
+tsne = TSNE(n_components=2, random_state=0)
+x_2d = tsne.fit_transform(x)
+
+# K-means 클러스터링
+kmeans = KMeans(n_clusters=3)  # 클러스터의 수는 조정 가능
+clusters = kmeans.fit_predict(x_2d)
+
+# 시각화
+plt.figure(figsize=(8, 6))
+plt.scatter(x_2d[:, 0], x_2d[:, 1], c=clusters, cmap='viridis', marker='o')
+plt.title('Clustering of Speaker Features')
+plt.xlabel('t-SNE feature 1')
+plt.ylabel('t-SNE feature 2')
+plt.colorbar()
+plt.show()

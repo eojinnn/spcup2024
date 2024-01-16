@@ -1,0 +1,143 @@
+import numpy as np
+import librosa
+import torch
+import torch.nn as nn
+import torchaudio
+from torchaudio.transforms import MFCC, MelSpectrogram
+from torch import optim
+from sklearn.metrics import accuracy_score
+
+class TDNN(nn.Module):
+    def __init__(self, input_dim, num_classes):
+        super(TDNN, self).__init__()
+        self.tdnn1 = nn.Conv1d(input_dim, 512, kernel_size=5, dilation=1)
+        self.tdnn2 = nn.Conv1d(512, 512, kernel_size=3, dilation=2)
+        self.tdnn3 = nn.Conv1d(512, 512, kernel_size=3, dilation=3)
+        self.tdnn4 = nn.Conv1d(512, 512, kernel_size=3, dilation=3)
+        self.tdnn5 = nn.Conv1d(512, 512, kernel_size=3, dilation=3)
+        
+        self.segment6 = nn.Linear(1024, 512)
+        self.segment7 = nn.Linear(512, 512)
+        self.output = nn.Linear(512, num_classes)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.tdnn1(x)
+        x = torch.relu(x)
+        x = self.tdnn2(x)
+        x = torch.relu(x)
+        x = self.tdnn3(x)
+        x = torch.relu(x)
+        x = self.tdnn4(x)
+        x = self.tdnn5(x)
+        
+        x = x.transpose(1, 2)
+        mean = torch.mean(x,1)
+        std = torch.var(x,1)
+        stat_pooling = torch.cat((mean,std),1)
+        segment6_out = self.segment6(stat_pooling)
+        x_vec = self.segment7(segment6_out)
+        predictions = self.output(x_vec)
+        return predictions,x_vec
+#       stats = torch.cat((x.mean(dim=2), x.std(dim=2)), dim=1)
+#       print(stats.shape)
+#       x = self.fc(stats)
+#       return x, stats
+        
+# MFCC 추출
+trainloader = train_loader(libri_train_list, libri_train_path, musan_path, rir_path, num_frames)
+trainLoader = torch.utils.data.DataLoader(trainloader, batch_size = batch_size, shuffle = True, drop_last = True)
+
+validationloader = train_loader(validation_list, validation_path, musan_path, rir_path, num_frames)
+validationLoader = torch.utils.data.DataLoader(validationloader, batch_size = batch_size, shuffle = True, drop_last = True)
+
+use_cuda = torch.cuda.is_available()
+device = torch.device("cuda" if use_cuda else "cpu")
+print(device)
+model = TDNN(input_dim=128, num_classes=142).to(device)
+optimizer = optim.Adam(model.parameters(), lr=0.001, weight_decay=0.0, betas=(0.9, 0.98), eps=1e-9)
+loss_fun = nn.CrossEntropyLoss()
+
+# train_features, train_labels = next(iter(trainLoader))
+# print(f"Feature batch shape: {train_features.size()}")
+# print(f"Labels batch shape: {train_labels.size()}")
+# print(train_labels)
+num_epochs = 100  # 예시 epoch 수
+def extract_mfcc(audio, sr=16000, n_mfcc=128):
+    mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=n_mfcc,
+                                n_mels=128,
+                                n_fft = 2048,
+                                hop_length = int(16000*0.03))
+    return mfccs
+
+def train(trainLoader,epoch):
+    train_loss_list=[]
+    full_preds=[]
+    full_gts=[]
+    model.train()
+    for data in trainLoader:
+        inputs, labels = data
+        mfccs = extract_mfcc(inputs.numpy(), sr=16000)
+        features = torch.tensor(mfccs, dtype=torch.float32)
+        print(f"Feature batch shape: {features.size()}")
+        labels_tensor = torch.tensor(labels, dtype=torch.long)
+        features , labels_tensor = features.to(device), labels_tensor.to(device)
+        features.requires_grad = True
+        optimizer.zero_grad()
+        pred_logits,x_vec = model(features)
+        #### CE loss
+        loss = loss_fun(pred_logits,labels_tensor)
+        loss.backward()
+        optimizer.step()
+        train_loss_list.append(loss.item())
+        #train_acc_list.append(accuracy)
+        #if i_batch%10==0:
+        #    print('Loss {} after {} iteration'.format(np.mean(np.asarray(train_loss_list)),i_batch))
+
+        predictions = np.argmax(pred_logits.detach().cpu().numpy(),axis=1)
+        for pred in predictions:
+            full_preds.append(pred)
+        for lab in labels_tensor.detach().cpu().numpy():
+            full_gts.append(lab)
+
+    mean_acc = accuracy_score(full_gts,full_preds)
+    mean_loss = np.mean(np.asarray(train_loss_list))
+    print('Total training loss {} and training Accuracy {} after {} epochs'.format(mean_loss,mean_acc,epoch))
+    
+
+
+def validation(validationLoader,epoch):
+    model.eval()
+    with torch.no_grad():
+        val_loss_list=[]
+        full_preds=[]
+        full_gts=[]
+        for data in validationLoader:
+            inputs, labels = data
+            # batch_data에서 오디오 데이터 추출
+            mfccs = extract_mfcc(inputs.numpy(), sr=16000)
+            print(mfccs.shape)
+            features = torch.tensor(mfccs, dtype=torch.float32)
+            print(f"Feature batch shape: {features.size()}")
+            labels_tensor = torch.tensor(labels, dtype=torch.long)
+            features , labels_tensor = features.to(device), labels_tensor.to(device)
+            pred_logits,x_vec = model(features)
+            #### CE loss
+            loss = loss_fun(pred_logits,labels_tensor)
+            val_loss_list.append(loss.item())
+            #train_acc_list.append(accuracy)
+            predictions = np.argmax(pred_logits.detach().cpu().numpy(),axis=1)
+            for pred in predictions:
+                full_preds.append(pred)
+            for lab in labels_tensor.detach().cpu().numpy():
+                full_gts.append(lab)
+                
+        mean_acc = accuracy_score(full_gts,full_preds)
+        mean_loss = np.mean(np.asarray(val_loss_list))
+        print('Total vlidation loss {} and Validation accuracy {} after {} epochs'.format(mean_loss,mean_acc,epoch))
+        
+        model_save_path = os.path.join('G:/SP_CUP_2024/model/', 'best_check_point_'+str(epoch)+'_'+str(mean_loss))
+        state_dict = {'model': model.state_dict(),'optimizer': optimizer.state_dict(),'epoch': epoch}
+        torch.save(state_dict, model_save_path)
+    
+

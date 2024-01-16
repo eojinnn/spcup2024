@@ -1,0 +1,42 @@
+from scipy.spatial.distance import cosine
+import numpy as np
+import librosa
+def extract_xvector_from_test_file(test_file, model, device):
+    audio, sr = librosa.load(test_file + '.wav', sr=16000)
+    length = num_frames * 160 + 240
+    if audio.shape[0] <= length:
+        shortage = length - audio.shape[0]
+        audio = numpy.pad(audio, (0, shortage), 'wrap') #오디오 길이가 2초보다 짧을 때는 wrapping
+    start_frame = numpy.int64(random.random()*(audio.shape[0]-length))
+    audio = audio[start_frame:start_frame + length]
+    inputs = numpy.stack([audio],axis=0)
+    mfccs = extract_mfcc(audio, sr=16000)
+    mfccs_tensor = torch.tensor([mfccs], dtype=torch.float32).to(device)
+    _, test_x_vector = model(mfccs_tensor)
+    return test_x_vector.detach().cpu().numpy().flatten()
+
+def find_closest_distance(test_x_vector, xvectors, label):
+    min_distance = float('inf')
+    closest_label = None
+    enrolled_xvectors = xvectors.get(label, [])
+
+    for enrolled_xvector in enrolled_xvectors:
+        distance = cosine(test_x_vector, enrolled_xvector)
+        if distance < min_distance:
+            min_distance = distance
+
+    return distance
+
+# 테스트 파일 경로
+test_path = "G:/SP_CUP_2024/ROBOVOX_SP_CUP_2024/data/single-channel/test"
+with open("G:/SP_CUP_2024/ROBOVOX_SP_CUP_2024/data/single-channel/signle-channel-trials_txt.txt", "r+") as file:
+    lines = file.readlines()
+    for line in lines:
+        file_name = line.split()[1]
+        speaker_ID = line.split()[0]
+        print(speaker_ID)
+        label = speaker_ID.split('_')[1]
+        test_file = test_path + '/' + line.split()[1]
+        test_x_vector = extract_xvector_from_test_file(test_file, model, device)
+        closest_distance = find_closest_distance(test_x_vector, xvectors,label)
+        file.write(f"{speaker_ID}\t{file_name}\t{closest_distance}\n")

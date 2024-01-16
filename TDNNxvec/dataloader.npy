@@ -1,0 +1,58 @@
+import os, re, glob
+train_path = "G:/SP_CUP_2024/ROBOVOX_SP_CUP_2024/data/single-channel/enrollment"
+musan_path = "G:/SP_CUP_2024/data_augmentation/musan"
+rir_path = "G:/SP_CUP_2024/data_augmentation/RIRS_NOISES/simulated_rirs"
+libri_train_path = "G:/SP_CUP_2024/data_augmentation/mls_french_opus/train"
+libri_test_path = "G:/SP_CUP_2024/data_augmentation/mls_french_opus/test"
+validation_path = "G:/SP_CUP_2024/data_augmentation/mls_french_opus/dev"
+num_frames = 500
+batch_size = 100
+def extract_number(filename):
+    match = re.search(r'spk_(\d+)-', filename)
+    if match:
+        return int(match.group(1))
+    else:
+        return float('inf')  # 일치하는 부분이 없는 경우 맨 뒤로 정렬
+#single channel enrollment train_list 
+file_list = os.listdir(train_path)
+train_files = glob.glob(os.path.join(train_path,'*.wav').replace("\\", "/"))
+with open("G:/SP_CUP_2024/ROBOVOX_SP_CUP_2024/data/single-channel/enrollment/annotations.txt", "w") as train_list:
+    for files in train_files:
+        file_name = files.split('\\')[-1]
+        labels = extract_number(files)
+        train_list.write(str(labels) +" /" + file_name + "\n")
+train_list = "G:/SP_CUP_2024/ROBOVOX_SP_CUP_2024/data/single-channel/enrollment/annotations.txt"
+
+#librispeech test_list
+libri_test_files = glob.glob(os.path.join(libri_test_path,'*/*/*/*.wav').replace("\\", "/"))
+with open("G:/SP_CUP_2024/data_augmentation/mls_french_opus/test/annotations.txt", "w") as libri_test_list:
+    for files in libri_test_files:
+        file_name = files
+        labels = files.split('\\')[2]
+        libri_test_list.write(str(labels) +" " + file_name + "\n")
+libri_test_list = "G:/SP_CUP_2024/data_augmentation/mls_french_opus/test/annotations.txt"
+
+#librispeech train_list
+libri_train_files = glob.glob(os.path.join(libri_train_path,'*/*/*/*.wav').replace("\\", "/"))
+label_files = {}
+for file in libri_train_files:
+    label = file.split('\\')[2]
+    if label not in label_files:
+        label_files[label] = []
+    label_files[label].append(file)
+with open("G:/SP_CUP_2024/data_augmentation/mls_french_opus/train/annotations.txt", "w") as libri_train_list:
+    for label, files in label_files.items():
+        for file in files[:10]:
+            file_name = file
+            labels = label
+            libri_train_list.write(str(labels) +" " + file_name + "\n")
+libri_train_list = "G:/SP_CUP_2024/data_augmentation/mls_french_opus/train/annotations.txt"
+
+#librispeech validation_list
+validation_files = glob.glob(os.path.join(validation_path,'*/*/*/*.wav'))
+with open("G:/SP_CUP_2024/data_augmentation/mls_french_opus/dev/annotations.txt", "w") as validation_list:
+    for files in validation_files:
+        file_name = files
+        labels = files.split('\\')[2]
+        validation_list.write(str(labels) +" " + file_name + "\n")
+validation_list = "G:/SP_CUP_2024/data_augmentation/mls_french_opus/dev/annotations.txt"        

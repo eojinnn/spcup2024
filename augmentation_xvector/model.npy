@@ -1,0 +1,78 @@
+import numpy as np
+import librosa
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+def extract_mfcc(audio, sr=16000, n_mfcc=13):
+    mfccs = librosa.feature.mfcc(y=audio, sr=sr, n_mfcc=n_mfcc)
+    return mfccs
+
+class TDNN(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(TDNN, self).__init__()
+        self.tdnn1 = nn.Conv1d(input_dim, 512, kernel_size=5, dilation=1)
+        self.tdnn2 = nn.Conv1d(512, 512, kernel_size=3, dilation=2)
+        self.tdnn3 = nn.Conv1d(512, 512, kernel_size=3, dilation=3)
+        self.tdnn4 = nn.Conv1d(512, 512, kernel_size=3, dilation=3)
+        self.tdnn5 = nn.Conv1d(512, 512, kernel_size=3, dilation=3)
+        
+        self.segment6 = nn.Linear(1024, 512)
+        self.segment7 = nn.Linear(512, 512)
+        self.output = nn.Linear(512, num_classes)
+        self.softmax = nn.Softmax(dim=1)
+
+    def forward(self, x):
+        x = self.tdnn1(x)
+        x = torch.relu(x)
+        x = self.tdnn2(x)
+        x = torch.relu(x)
+        x = self.tdnn3(x)
+        x = torch.relu(x)
+        x = self.tdnn4(x)
+        x = self.tdnn5(x)
+        
+        mean = torch.mean(x,1)
+        std = torch.var(x,1)
+        stat_pooling = torch.cat((mean,std),1)
+        segment6_out = self.segment6(stat_pooling)
+        x_vec = self.segment7(segment6_out)
+        predictions = self.output(x_vec)
+        return predictions,x_vec
+#       stats = torch.cat((x.mean(dim=2), x.std(dim=2)), dim=1)
+        print(stats.shape)
+        x = self.fc(stats)
+        return x, stats
+tdnn_model = TDNN(input_dim = 13, output_dim = 75)
+criterion = nn.CrossEntropyLoss()  # 예시: 분류 작업의 경우
+optimizer = optim.Adam(tdnn_model.parameters(), lr=0.001)
+        
+# MFCC 추출
+trainloader = train_loader(train_list, train_path, musan_path, rir_path, num_frames)
+trainLoader = torch.utils.data.DataLoader(trainloader, batch_size = batch_size, shuffle = True, drop_last = True)
+train_features, train_labels = next(iter(trainLoader))
+print(f"Feature batch shape: {train_features.size()}")
+print(f"Labels batch shape: {train_labels.size()}")
+print(train_labels)
+num_epochs = 10  # 예시 epoch 수
+
+for epoch in range(num_epochs):
+    for (inputs, labels) in trainLoader:  # train_loader는 데이터 로더
+        labels_tensor = torch.tensor(labels, dtype=torch.long)
+        # batch_data에서 오디오 데이터 추출
+        mfccs = extract_mfcc(inputs.numpy(), sr=16000)
+        print(mfccs.shape)
+        inputs_tensor = torch.tensor(mfccs, dtype=torch.float32)
+        print(f"Feature batch shape: {inputs_tensor.size()}")
+
+        # 그라디언트 초기화
+        optimizer.zero_grad()
+
+        # 순전파 + 역전파 + 최적화
+        outputs = tdnn_model(inputs_tensor)
+        loss = criterion(outputs, labels_tensor)
+        loss.backward()
+        optimizer.step()
+
+    print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {loss.item():.4f}')
+
